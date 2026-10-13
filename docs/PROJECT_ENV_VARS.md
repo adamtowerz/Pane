@@ -45,9 +45,10 @@ In WSL projects the variables are added to `WSLENV`, so they reach the Linux she
 
 ## When a keychain item cannot be read
 
-The terminal or script still starts, without that variable. A terminal shows a line
-from Pane naming the variable, the item and the keychain's reason; scripts log the
-same line in the Logs panel. The value is never printed. Fix the item in Keychain
+The terminal or script still starts, without that variable. After the shell's first
+prompt, the terminal shows a `[Pane]` line naming the variable, the item and the
+keychain's reason; setup and archive scripts write the same line to the Pane's logs.
+The value is never printed. Fix the item in Keychain
 Access (unlock the keychain, or allow access) or change the variable in Project
 Settings, then open a new terminal.
 

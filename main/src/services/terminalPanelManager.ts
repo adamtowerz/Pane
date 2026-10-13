@@ -1586,8 +1586,13 @@ export class TerminalPanelManager extends EventEmitter {
     // Begin at-a-glance status detection for AI/CLI agent panels.
     this.registerAgentStatusPanel(terminalProcess);
 
-    // A variable that could not be read is missing from this shell; say so here.
-    for (const warning of projectEnv.warnings) this.showNotice(panel.id, warning);
+    // A variable that could not be read is missing from this shell; say so
+    // after the first prompt, once the viewer that opened the panel is listening.
+    if (projectEnv.warnings.length > 0) {
+      this.scheduleAfterShellPrompt(ptyProcess, () => {
+        for (const warning of projectEnv.warnings) this.showNotice(panel.id, warning);
+      });
+    }
 
     // Tell the renderer which `ptyId` backs this panel so `TerminalPanel.tsx`
     // can ack flow-control bytes over the ptyHost port. Flag-off path skips

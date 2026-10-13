@@ -15,7 +15,14 @@ import { FakeKeychain } from '../test/fakeKeychain';
 
 class FakePtyHandle implements PtyHandleLike {
   readonly pid = 4242;
-  onData() { return { dispose: () => undefined }; }
+  private readonly listeners = new Set<(data: string) => void>();
+  onData(listener: (data: string) => void) {
+    this.listeners.add(listener);
+    return { dispose: () => { this.listeners.delete(listener); } };
+  }
+  emit(data: string): void {
+    for (const listener of this.listeners) listener(data);
+  }
   onExit() { return { dispose: () => undefined }; }
   async write(): Promise<void> {}
   async resize(): Promise<void> {}
@@ -152,9 +159,10 @@ describe('terminal panels and project environment variables', () => {
 
     expect(spawned.env.UIVERIFY_API_KEY).toBeUndefined();
     expect(spawned.env.NODE_ENV).toBe('development');
-    // Kept in the pane's scrollback, so a viewer that attaches later sees it too.
+    // Shown after the shell's first prompt, once the panel's viewer is listening.
+    Array.from(ptyHost.handles.values()).at(-1)?.emit('$ ');
+    await vi.waitFor(() => expect(lastManager?.getTerminalSnapshot(panel.id)?.scrollbackBuffer).toContain('UIVERIFY_API_KEY'));
     const shown = lastManager?.getTerminalSnapshot(panel.id)?.scrollbackBuffer ?? '';
-    expect(shown).toContain('UIVERIFY_API_KEY');
     expect(shown).toContain('User interaction is not allowed');
     expect(shown).not.toContain('sk-test-secret');
   });
