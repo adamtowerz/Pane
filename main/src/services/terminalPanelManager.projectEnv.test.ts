@@ -65,7 +65,7 @@ describe('terminal panels and project environment variables', () => {
     ptyHost = new FakePtyHost();
     managers = [];
     keychain = new FakeKeychain();
-    projectEnv = new ProjectEnvService(databaseService, () => keychain);
+    projectEnv = new ProjectEnvService(databaseService, () => keychain, 'Pane');
     const configManager = new ConfigManager();
     vi.spyOn(configManager, 'getUsePtyHost').mockReturnValue(true);
     setPaneRuntime({

@@ -18,7 +18,7 @@ describe('project environment variables', () => {
     db = new DatabaseService(path.join(tempDir, 'sessions.db'));
     db.initialize();
     keychain = new FakeKeychain();
-    service = new ProjectEnvService(db, () => keychain);
+    service = new ProjectEnvService(db, () => keychain, 'Pane');
   });
 
   afterEach(() => {
@@ -109,6 +109,30 @@ describe('project environment variables', () => {
 
     expect(keychain.get('Pane', `${project.id}:OWN`)).toBeUndefined();
     expect(keychain.get('conductor', 'uiverify')).toBe('theirs');
+  });
+
+  it('never deletes a referenced item, even one named like Pane\'s own', async () => {
+    const project = db.createProject('cura', '/repos/cura');
+    // Another Pane data directory (a dev build, say) may own an item with this name.
+    keychain.set('Pane', `${project.id}:TOKEN`, 'another-instance');
+    await service.save(project.id, [{ key: 'TOKEN', source: 'keychain', service: 'Pane', account: `${project.id}:TOKEN` }]);
+
+    await service.save(project.id, []);
+
+    expect(keychain.get('Pane', `${project.id}:TOKEN`)).toBe('another-instance');
+  });
+
+  it('keeps Pane\'s own item after a rename and deletes it once nothing uses it', async () => {
+    const project = db.createProject('cura', '/repos/cura');
+    const [stored] = await service.save(project.id, [{ key: 'OLD', source: 'keychain', secret: 'kept' }]);
+    if (stored.source !== 'keychain') throw new Error('expected a keychain variable');
+
+    const [renamed] = await service.save(project.id, [{ key: 'NEW', source: 'keychain', service: stored.service, account: stored.account }]);
+    expect(renamed).toMatchObject({ key: 'NEW', managed: true });
+    await expect(service.resolve(project.id)).resolves.toEqual({ env: { NEW: 'kept' }, warnings: [] });
+
+    await service.save(project.id, []);
+    expect(keychain.size).toBe(0);
   });
 
   it('refuses invalid, reserved and duplicate names and saves nothing', async () => {

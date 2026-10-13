@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { macKeychain, parseSecurityPassword, systemKeychain, type SecurityRunner } from './keychain';
+import { macKeychain, paneKeychainService, parseSecurityPassword, systemKeychain, type SecurityRunner } from './keychain';
 
 describe('macOS keychain', () => {
   it('reads plain and hex-encoded passwords from security output', () => {
@@ -38,5 +38,12 @@ describe('macOS keychain', () => {
     expect(keychain.supported).toBe(false);
     await expect(keychain.read('Pane', 'x')).rejects.toMatchObject({ code: 'KEYCHAIN_UNSUPPORTED' });
     await expect(keychain.write('Pane', 'x', 'y')).rejects.toThrow(/only on macOS.*linux/);
+  });
+});
+
+describe('Pane keychain service name', () => {
+  it('is "Pane" for the default data directory and names any other one', () => {
+    expect(paneKeychainService('/Users/me/.pane', '/Users/me')).toBe('Pane');
+    expect(paneKeychainService('/Users/me/.pane_test', '/Users/me')).toBe('Pane (/Users/me/.pane_test)');
   });
 });

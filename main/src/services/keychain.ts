@@ -1,4 +1,6 @@
 import { execFile } from 'child_process';
+import os from 'os';
+import path from 'path';
 import { PaneError } from '../../../shared/paneError';
 
 /** Generic-password items in the OS keychain, addressed by service and account. */
@@ -101,4 +103,18 @@ function unsupportedKeychain(platform: string): Keychain {
 /** The keychain of the host Pane runs on. */
 export function systemKeychain(platform: string = process.platform): Keychain {
   return platform === 'darwin' ? macKeychain() : unsupportedKeychain(platform);
+}
+
+/**
+ * Service of the keychain items Pane creates for typed secrets. A data directory
+ * other than the default (a dev build's `PANE_DIR`, say) gets its own service, so
+ * two Pane instances never share or delete each other's items.
+ */
+export function paneKeychainService(appDirectory: string, homeDirectory: string = os.homedir()): string {
+  return path.resolve(appDirectory) === path.join(homeDirectory, '.pane') ? 'Pane' : `Pane (${path.resolve(appDirectory)})`;
+}
+
+/** Account of the keychain item Pane creates for `key` in project `projectId`. */
+export function paneKeychainAccount(projectId: number, key: string): string {
+  return `${projectId}:${key}`;
 }

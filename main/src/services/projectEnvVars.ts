@@ -1,13 +1,12 @@
 import { PaneError, reasonOf } from '../../../shared/paneError';
 import {
-  PANE_KEYCHAIN_SERVICE,
-  paneKeychainAccount,
   projectEnvKeyProblem,
   type ProjectEnvVar,
   type ProjectEnvVarInput,
 } from '../../../shared/types/projectEnvVars';
 import type { DatabaseService } from '../database/database';
-import { keychainUnsupportedError, systemKeychain, type Keychain } from './keychain';
+import { getAppDirectory } from '../utils/appDirectory';
+import { keychainUnsupportedError, paneKeychainAccount, paneKeychainService, systemKeychain, type Keychain } from './keychain';
 
 /** A project's variables, ready to merge into a child process environment. */
 export interface ResolvedProjectEnv {
@@ -33,6 +32,8 @@ export class ProjectEnvService {
   constructor(
     private readonly store: ProjectEnvStore,
     private readonly keychain: () => Keychain = systemKeychain,
+    /** Service of the items Pane creates; see `paneKeychainService`. */
+    private readonly keychainService: string = paneKeychainService(getAppDirectory()),
   ) {}
 
   list(projectId: number): ProjectEnvVar[] {
@@ -64,6 +65,11 @@ export class ProjectEnvService {
       throw keychainUnsupportedError();
     }
 
+    // An item stays Pane's own while a variable still points at it, even after a rename.
+    const previous = this.store.getProjectEnvVars(projectId);
+    const ownItems = new Set(previous.flatMap(old =>
+      old.source === 'keychain' && old.managed ? [`${old.service}\u0000${old.account}`] : []));
+
     const variables: ProjectEnvVar[] = [];
     for (const input of inputs) {
       if (input.source === 'plain') {
@@ -73,27 +79,22 @@ export class ProjectEnvService {
       if ('secret' in input) {
         const account = paneKeychainAccount(projectId, input.key);
         try {
-          await keychain.write(PANE_KEYCHAIN_SERVICE, account, input.secret);
+          await keychain.write(this.keychainService, account, input.secret);
         } catch (error) {
           throw new PaneError(
             'KEYCHAIN_WRITE_FAILED',
-            `Pane could not store ${input.key} in ${itemName(PANE_KEYCHAIN_SERVICE, account)}: ${reasonOf(error)}. Nothing was saved.`,
+            `Pane could not store ${input.key} in ${itemName(this.keychainService, account)}: ${reasonOf(error)}. Nothing was saved.`,
             'Unlock the login keychain in Keychain Access, then save Project Settings again.',
           );
         }
-        variables.push({ key: input.key, source: 'keychain', service: PANE_KEYCHAIN_SERVICE, account, managed: true });
+        variables.push({ key: input.key, source: 'keychain', service: this.keychainService, account, managed: true });
         continue;
       }
-      variables.push({
-        key: input.key,
-        source: 'keychain',
-        service: input.service.trim(),
-        account: input.account.trim(),
-        managed: input.service.trim() === PANE_KEYCHAIN_SERVICE && input.account.trim() === paneKeychainAccount(projectId, input.key),
-      });
+      const service = input.service.trim();
+      const account = input.account.trim();
+      variables.push({ key: input.key, source: 'keychain', service, account, managed: ownItems.has(`${service}\u0000${account}`) });
     }
 
-    const previous = this.store.getProjectEnvVars(projectId);
     this.store.replaceProjectEnvVars(projectId, variables);
 
     const stillReferenced = new Set(variables.flatMap(variable =>

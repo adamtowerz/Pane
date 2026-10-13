@@ -29,7 +29,7 @@ beforeEach(() => {
   // SAFETY: This registry test only needs IpcMain.handle for channel binding.
   const ipc = { handle: vi.fn() } as IpcMain;
   registry = new PaneCommandRegistry();
-  registerProjectHandlers(ipc, services, registry, undefined, new ProjectEnvService(database, () => keychain));
+  registerProjectHandlers(ipc, services, registry, undefined, new ProjectEnvService(database, () => keychain, 'Pane'));
 });
 
 afterEach(() => {

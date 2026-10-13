@@ -59,13 +59,13 @@ describe('project environment variables storage', () => {
     db.close();
   });
 
-  it('marks a keychain reference as Pane-managed only for Pane\'s own item', () => {
+  it('keeps whether Pane created each keychain item', () => {
     const db = new DatabaseService(tempDatabasePath());
     db.initialize();
     const project = db.createProject('repo', '/repos/repo');
     db.replaceProjectEnvVars(project.id, [
       { key: 'OWN', source: 'keychain', service: 'Pane', account: `${project.id}:OWN`, managed: true },
-      { key: 'SHARED', source: 'keychain', service: 'conductor', account: 'uiverify', managed: false },
+      { key: 'LOOKALIKE', source: 'keychain', service: 'Pane', account: `${project.id}:LOOKALIKE`, managed: false },
     ]);
 
     expect(db.getProjectEnvVars(project.id).map(variable => variable.source === 'keychain' && variable.managed)).toEqual([true, false]);

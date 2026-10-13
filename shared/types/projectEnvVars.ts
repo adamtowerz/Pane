@@ -7,14 +7,6 @@
  * never stored by Pane or sent to the renderer.
  */
 
-/** Keychain service of the items Pane creates when a user types a secret value. */
-export const PANE_KEYCHAIN_SERVICE = 'Pane';
-
-/** Account of the keychain item Pane creates for `key` in project `projectId`. */
-export function paneKeychainAccount(projectId: number, key: string): string {
-  return `${projectId}:${key}`;
-}
-
 /** A stored variable as main and the renderer see it. Never carries a secret value. */
 export type ProjectEnvVar =
   | { key: string; source: 'plain'; value: string }
@@ -23,7 +15,7 @@ export type ProjectEnvVar =
       source: 'keychain';
       service: string;
       account: string;
-      /** True when the item is Pane's own (`PANE_KEYCHAIN_SERVICE`, `<projectId>:<key>`). */
+      /** True when Pane created the item from a typed secret, so Pane deletes it when no variable uses it. */
       managed: boolean;
     };
 

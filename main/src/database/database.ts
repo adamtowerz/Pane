@@ -30,7 +30,7 @@ import {
   decodeOptionalBoundary,
   type JsonObject,
 } from "../../../shared/validation/boundaryDecoder";
-import { PANE_KEYCHAIN_SERVICE, paneKeychainAccount, type ProjectEnvVar } from "../../../shared/types/projectEnvVars";
+import type { ProjectEnvVar } from "../../../shared/types/projectEnvVars";
 import { JOURNEYS, type Journey, type JourneyTimingSummary } from "../../../shared/types/journeyTimings";
 import { PanelBufferStore, splitPanelBufferState, type PanelBuffers } from "./panelBuffers";
 import { ensureUsageRollup } from "../services/usage/usageRollup";
@@ -858,6 +858,8 @@ export class DatabaseService {
         value TEXT,
         keychain_service TEXT,
         keychain_account TEXT,
+        -- 1 when Pane created the item from a typed secret and may delete it.
+        keychain_managed INTEGER NOT NULL DEFAULT 0,
         order_index INTEGER NOT NULL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(project_id, key),
@@ -2791,7 +2793,7 @@ export class DatabaseService {
     // SAFETY: This fixed SQLite query projection matches the declared row type at this database boundary.
     const rows = this.db
       .prepare(
-        "SELECT key, source, value, keychain_service, keychain_account FROM project_env_vars WHERE project_id = ? ORDER BY order_index ASC, id ASC",
+        "SELECT key, source, value, keychain_service, keychain_account, keychain_managed FROM project_env_vars WHERE project_id = ? ORDER BY order_index ASC, id ASC",
       )
       .all(projectId) as Array<{
       key: string;
@@ -2799,17 +2801,16 @@ export class DatabaseService {
       value: string | null;
       keychain_service: string | null;
       keychain_account: string | null;
+      keychain_managed: number;
     }>;
     return rows.map((row): ProjectEnvVar => {
       if (row.source === 'plain') return { key: row.key, source: 'plain', value: row.value ?? '' };
-      const service = row.keychain_service ?? '';
-      const account = row.keychain_account ?? '';
       return {
         key: row.key,
         source: 'keychain',
-        service,
-        account,
-        managed: service === PANE_KEYCHAIN_SERVICE && account === paneKeychainAccount(projectId, row.key),
+        service: row.keychain_service ?? '',
+        account: row.keychain_account ?? '',
+        managed: row.keychain_managed === 1,
       };
     });
   }
@@ -2817,16 +2818,16 @@ export class DatabaseService {
   /** Replace a project's variables with `variables`, in that order. */
   replaceProjectEnvVars(projectId: number, variables: readonly ProjectEnvVar[]): void {
     const insert = this.db.prepare(`
-      INSERT INTO project_env_vars (project_id, key, source, value, keychain_service, keychain_account, order_index)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO project_env_vars (project_id, key, source, value, keychain_service, keychain_account, keychain_managed, order_index)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     this.db.transaction(() => {
       this.db.prepare("DELETE FROM project_env_vars WHERE project_id = ?").run(projectId);
       variables.forEach((variable, index) => {
         if (variable.source === 'plain') {
-          insert.run(projectId, variable.key, 'plain', variable.value, null, null, index);
+          insert.run(projectId, variable.key, 'plain', variable.value, null, null, 0, index);
         } else {
-          insert.run(projectId, variable.key, 'keychain', null, variable.service, variable.account, index);
+          insert.run(projectId, variable.key, 'keychain', null, variable.service, variable.account, variable.managed ? 1 : 0, index);
         }
       });
     })();
